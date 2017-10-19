@@ -1,5 +1,5 @@
 {
-  "name": "cpnn",
+  "name": "FEAI",
   "version": "0.1.0",
   "private": true,
   "devDependencies": {
@@ -8,7 +8,9 @@
   "dependencies": {
     "@cycle/dom": "18.3.0",
     "@cycle/run": "3.3.0",
+    "awesome-typescript-loader": "3.2.3",
     "deeplearn": "^0.3.2",
+    "typescript": "2.5.3",
     "xstream": "11.0.0"
   },
   "scripts": {
@@ -18,7 +20,7 @@
     "eject": "cycle-scripts eject"
   },
   "cca": {
-    "language": "javascript",
+    "language": "typescript",
     "streamLib": "xstream"
   }
 }

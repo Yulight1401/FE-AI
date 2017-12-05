@@ -14,11 +14,14 @@ alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n'
 Alphabet = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U',
             'V', 'W', 'X', 'Y', 'Z']
 
-char_set = number + alphabet + Alphabet
+gene_char_set = number + alphabet + Alphabet
+char_set = number + alphabet
 
+# 1为全部选择爬取的数据
+MUTI_VALUE = 0.20
 TEST_DATA_PATH = '../datas/'
 ##图片高40 60
-IMAGE_HEIGHT = 60
+IMAGE_HEIGHT = 40
 ##图片宽75 160
 IMAGE_WIDTH = 75
 ##验证码长度
@@ -32,26 +35,38 @@ keep_prob = tf.placeholder(tf.float32)  ##节点保留率
 
 
 ##生成n位验证码字符 这里n=4
-def random_text(char_set=char_set, captcha_size=4):
+def random_text(char_set=gene_char_set, captcha_size=4):
     captcha_text = []
     for i in range(captcha_size):
         c = random.choice(char_set)
         captcha_text.append(c)
     return captcha_text
 
+##混合爬取与随机生成的数据
+def get_multi_datas():
+    random_choice = random.random()
+    if random_choice < MUTI_VALUE:
+        captcha_text, captcha_image = get_test_image()
+    else:
+        captcha_text, captcha_image = gene_image_text()
+    return captcha_text, captcha_image
 
 ##使用ImageCaptcha库生成验证码
 def gene_image_text():
+    #自己的生成算法
     image = Image.new('RGB', (IMAGE_WIDTH, IMAGE_HEIGHT), (255, 255, 255, 255))
-    font = ImageFont.truetype('/usr/share/fonts/AppleGaramond.ttf', 25)
+    font = ImageFont.truetype('../font/xiuyin5-Bold.otf', 28)
     draw = ImageDraw.Draw(image)
+    # captcha_text = ['7', 'u', 'e', 'f']
     captcha_text = random_text()
-    shink_size = 6
+    shink_size = 6 + (random.random() * 6 - 3)
+    random_size = 0.4
+    offset = (random.random() * 14 - 7) + 6
     for index in range(4):
         text = captcha_text[index]
         font_width, font_height = font.getsize(text)
-        random_offset = random.random() * 0.2 - 0.1
-        draw.text((index * (IMAGE_WIDTH - font_width * random_offset) / MAX_CAPTCHA + shink_size * (MAX_CAPTCHA / 2 - index), (IMAGE_HEIGHT - font_height) / MAX_CAPTCHA), text,
+        random_offset = random.random() * random_size - random_size / 2
+        draw.text((index * (IMAGE_WIDTH - font_width * random_offset) / MAX_CAPTCHA + shink_size * (MAX_CAPTCHA / 2 - index) - offset, (IMAGE_HEIGHT - font_height + 11) / MAX_CAPTCHA), text,
                 font= font,fill=(245, 208, 0, 255))
 
     # print(captcha_text)
@@ -59,13 +74,17 @@ def gene_image_text():
     captcha_image = image
     captcha_image = np.array(captcha_image)
 
+    # #captcha生成
     # image = ImageCaptcha()
     # captcha_text = random_text()
     # captcha_text = ''.join(captcha_text)
     # captcha = image.generate(captcha_text)
     # captcha_image = Image.open(captcha)
     # captcha_image = np.array(captcha_image)
-    return captcha_text, captcha_image
+
+    # #直接使用训练集
+    # captcha_text, captcha_image = get_test_image()
+    return map(lambda x: x.lower(), captcha_text), captcha_image
 
 
 ##彩色图转化为灰度图
@@ -119,7 +138,7 @@ def get_next_batch(batch_size=128):
 
     def wrap_gene_image_text():
         while 1:
-            text, image = gene_image_text()
+            text, image = get_multi_datas()
             if image.shape == (IMAGE_HEIGHT, IMAGE_WIDTH, 3):
                 return text, image
 
@@ -199,13 +218,13 @@ def train_first():
         sess.run(tf.global_variables_initializer())
         step = 0
         while 1:
-            batch_x, batch_y = get_next_batch(64)
+            batch_x, batch_y = get_next_batch(20)
             _, loss_ = sess.run([optm, loss], feed_dict={X: batch_x, Y: batch_y, keep_prob: 0.75})
             if step % 50 == 0:
                 batch_x_test, batch_y_test = get_next_batch(100)
                 acc = sess.run(accuracy, feed_dict={X: batch_x_test, Y: batch_y_test, keep_prob: 1.})
                 print(step, acc, loss_)
-                if acc > 0.80:  ##准确率大于0.80保存模型 可自行调整
+                if acc > 0.80:
                     saver.save(sess, '../models/crack_capcha.model', global_step=step)
                     break
             step += 1
@@ -221,17 +240,21 @@ def train_continue(step):
         saver.restore(sess, path)
         ##36300 36300 0.9325 0.0147698
         while 1:
-            batch_x, batch_y = get_next_batch(100)
+            batch_x, batch_y = get_next_batch(200)
             _, loss_ = sess.run([optm, loss], feed_dict={X: batch_x, Y: batch_y, keep_prob: 0.75})
             if step % 50 == 0:
-                batch_x_test, batch_y_test = get_next_batch(100)
+                batch_x_test, batch_y_test = get_next_batch(200)
                 acc = sess.run(accuracy, feed_dict={X: batch_x_test, Y: batch_y_test, keep_prob: 1.})
                 print(step, acc, loss_)
-                if acc >= 0.925:
-                    saver.save(sess, '../models/crack_capcha.model', global_step=step)
-                if acc >= 0.95:
+                if acc >= 0.945:
                     saver.save(sess, '../models/crack_capcha.model', global_step=step)
                     break
+                # if acc >= 0.85:
+                #     saver.save(sess, '../models/crack_capcha.model', global_step=step)
+                #     step += 1
+                #     continue
+                # if acc >= 0.80:
+                #     saver.save(sess, '../models/crack_capcha.model', global_step=step)
             step += 1
 
 
@@ -251,31 +274,49 @@ def crack_captcha(captcha_image, step):
 
 def get_test_image():
     files = os.listdir(TEST_DATA_PATH)
-    file_name = files[10]
-    text = list(file_name.split('.')[0])
+    file_name = random.choice(files)
+    text = list(file_name.split('.')[0].lower())
+    if len(text) != 4:
+        file_name = files[0]
+        text = list(file_name.split('.')[0])
     image = Image.open(TEST_DATA_PATH + file_name)
+    image = image.resize((IMAGE_WIDTH, IMAGE_HEIGHT), Image.ANTIALIAS)
+    image = np.array(image)
+    return text, image
+
+def get_test_image_more(name):
+    text = list(name.split('.')[0].lower())
+    image = Image.open('../test_datas/' + name)
     image = image.resize((IMAGE_WIDTH, IMAGE_HEIGHT), Image.ANTIALIAS)
     image = np.array(image)
     return text, image
 
 if __name__ == '__main__':
     # gene_image_text()
-    train = 0
+    train = 1
     if train:
-        # train_continue(5750)
-        train_first()
+        train_continue(13950)
+        # train_first()
     else:
+        # text, image = get_multi_datas()
         # text, image = get_test_image()
-        text, image = gene_image_text()
+        # text, image1 = gene_image_text()
+        text, image = get_test_image_more('LwnT.gif')
 
         f = plt.figure()
         ax = f.add_subplot(111)
-        ax.text(0.1, 0.9, text, ha='center', va='center', transform=ax.transAxes)
+        ax.text(0.2, 0.9, ['right:'] + text, ha='center', va='center', transform=ax.transAxes)
+
+        image2 = convert2gray(image)
+        image2 = image2.flatten() / 255
+
+        predict_text = crack_captcha(image2, 13950)
+        print("正确: {}  预测: {}".format(text, [char_set[char] for i, char in enumerate(predict_text)]))
+
+        ax = f.add_subplot(111)
+        ax.text(0.6, 0.9, ['predict: '] + [char_set[char] for i, char in enumerate(predict_text)], ha='center', va='center', transform=ax.transAxes)
+
+        # plt.imshow(image1)
+        # plt.show()
         plt.imshow(image)
         plt.show()
-
-        image = convert2gray(image)
-        image = image.flatten() / 255
-
-        predict_text = crack_captcha(image, 7500)
-        print("正确: {}  预测: {}".format(text, [char_set[char] for i, char in enumerate(predict_text)]))
